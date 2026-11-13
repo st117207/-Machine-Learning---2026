@@ -1,0 +1,17 @@
+# Исходные данные NASA IMS (~5.3 ГБ) — скачиваются автоматически (build.py, этап 1)
+data/raw/
+
+# Служебные файлы LaTeX
+report/report.aux
+report/report.log
+report/report.toc
+report/report.out
+
+# Кэш Python и служебные файлы
+__pycache__/
+*.pyc
+_preview/
+build_final.log
+
+# Архивы сдачи
+*.zip
