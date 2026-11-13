@@ -1,0 +1,23 @@
+\begin{table}[H]
+\centering
+\caption{Качество прогнозов на отложенном испытании}\label{tab:test}
+\begin{tabular}{p{3.4cm}c ccc}
+\toprule
+Модель & Призн. & $R^2$ (тест) & MAE (тест), ч & $\rho$ Спирмена \\
+\midrule
+Базовая (медиана) & А & \textminus{}11,93 & 163,5 & --- \\
+МНК (наивная) & А & \textminus{}14122,62 & 3648,1 & \textminus{}0,41 \\
+МНК + цель min(RUL, C) & А & \textminus{}1441,21 & 1724,2 & \textminus{}0,31 \\
+Полином + гребень & А & \textminus{}7,14 & 80,8 & \textminus{}0,57 \\
+Ridge & А & \textminus{}7,14 & 80,8 & \textminus{}0,57 \\
+Lasso & А & \textminus{}18,01 & 164,0 & \textminus{}0,48 \\
+Elastic Net & А & \textminus{}7,09 & 81,2 & \textminus{}0,58 \\
+МНК (наивная) & Б & \textminus{}464,75 & 996,4 & 0,57 \\
+МНК + цель min(RUL, C) & Б & \textminus{}1,48 & 65,0 & 0,69 \\
+Полином + гребень & Б & \textminus{}98,51 & 448,4 & \textminus{}0,79 \\
+Ridge & Б & \textminus{}0,17 & 40,9 & 0,79 \\
+Lasso & Б & 0,47 & 25,9 & 0,78 \\
+Elastic Net & Б & 0,15 & 32,7 & 0,79 \\
+\bottomrule
+\end{tabular}
+\end{table}

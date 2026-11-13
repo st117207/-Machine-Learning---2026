@@ -1,0 +1,26 @@
+\begin{table}[H]
+\centering
+\caption{Метрики качества моделей: MAE, RMSE, $R^2$ (часы до конца испытания)}\label{tab:metrics}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{p{2.9cm}c rrr rrr rrr}
+\toprule
+ & & \multicolumn{3}{c}{Обучение} & \multicolumn{3}{c}{Кросс-валидация} & \multicolumn{3}{c}{Тест (испытание 2)} \\
+\cmidrule(lr){3-5}\cmidrule(lr){6-8}\cmidrule(lr){9-11}
+Модель & Призн. & MAE & RMSE & $R^2$ & MAE & RMSE & $R^2$ & MAE & RMSE & $R^2$ \\
+\midrule
+Базовая (медиана) & А & 192,2 & 246,0 & \textminus{}0,09 & 254,4 & 260,4 & \textminus{}102,10 & 163,5 & 170,2 & \textminus{}11,93 \\
+МНК (наивная) & А & 41,9 & 53,8 & 0,95 & 287,2 & 378,3 & \textminus{}607,69 & 3648,1 & 5626,3 & \textminus{}14122,62 \\
+МНК + цель min(RUL, C) & А & 139,7 & 225,1 & 0,08 & 103,2 & 122,9 & \textminus{}12,59 & 1724,2 & 1797,9 & \textminus{}1441,21 \\
+Полином + гребень & А & 128,8 & 201,1 & 0,27 & 81,3 & 89,4 & \textminus{}4,41 & 80,8 & 135,1 & \textminus{}7,14 \\
+Ridge & А & 128,8 & 201,1 & 0,27 & 81,3 & 89,4 & \textminus{}4,41 & 80,8 & 135,1 & \textminus{}7,14 \\
+Lasso & А & 126,7 & 199,7 & 0,28 & 81,0 & 89,5 & \textminus{}4,43 & 164,0 & 206,4 & \textminus{}18,01 \\
+Elastic Net & А & 129,0 & 201,2 & 0,27 & 81,1 & 89,2 & \textminus{}4,35 & 81,2 & 134,7 & \textminus{}7,09 \\
+МНК (наивная) & Б & 100,5 & 123,0 & 0,73 & 217,6 & 245,1 & \textminus{}162,28 & 996,4 & 1021,7 & \textminus{}464,75 \\
+МНК + цель min(RUL, C) & Б & 147,8 & 230,7 & 0,04 & 104,8 & 115,9 & \textminus{}10,04 & 65,0 & 74,5 & \textminus{}1,48 \\
+Полином + гребень & Б & 140,6 & 226,4 & 0,07 & 91,1 & 104,2 & \textminus{}5,30 & 448,4 & 472,3 & \textminus{}98,51 \\
+Ridge & Б & 150,8 & 232,4 & 0,02 & 103,3 & 114,1 & \textminus{}9,18 & 40,9 & 51,2 & \textminus{}0,17 \\
+Lasso & Б & 150,0 & 232,4 & 0,02 & 101,6 & 111,5 & \textminus{}8,37 & 25,9 & 34,6 & 0,47 \\
+Elastic Net & Б & 149,8 & 232,0 & 0,03 & 103,2 & 114,0 & \textminus{}9,21 & 32,7 & 43,7 & 0,15 \\
+\bottomrule
+\end{tabular}}
+\end{table}

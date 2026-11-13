@@ -1,0 +1,12 @@
+
+7-Zip 26.06 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-11-06
+
+Scanning the drive for archives:
+
+ERROR: Не удается найти указанный файл.
+IMS.7z
+
+
+
+System ERROR:
+Не удается найти указанный файл.

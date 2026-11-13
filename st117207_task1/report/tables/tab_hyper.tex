@@ -1,0 +1,25 @@
+\begin{table}[H]
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\caption{Подобранные по кросс-валидации гиперпараметры моделей}\label{tab:hyper}
+\begin{tabular}{>{\raggedright\arraybackslash}p{2.7cm}c>{\raggedright\arraybackslash}p{3.3cm}cc}
+\toprule
+Модель & Призн. & Гиперпараметры & $p_{\text{эф}}$ & MAE КВ, ч \\
+\midrule
+Базовая (медиана) & А &  & 1 & 254,4 \\
+МНК (наивная) & А &  & 37 & 287,2 \\
+МНК + цель min(RUL, C) & А & $C$=250 & 37 & 103,2 \\
+Полином + гребень & А & $\alpha$=100,000, $C$=300, $d$=1 & 37 & 81,3 \\
+Ridge & А & $\alpha$=100,000, $C$=300 & 37 & 81,3 \\
+Lasso & А & $\alpha$=0,316, $C$=300 & 28 & 81,0 \\
+Elastic Net & А & $\alpha$=0,056, $C$=300, $l_1$=0.1 & 35 & 81,1 \\
+МНК (наивная) & Б &  & 10 & 217,6 \\
+МНК + цель min(RUL, C) & Б & $C$=250 & 10 & 104,8 \\
+Полином + гребень & Б & $\alpha$=0,056, $C$=250, $d$=2 & 55 & 91,1 \\
+Ridge & Б & $\alpha$=316,228, $C$=250 & 10 & 103,3 \\
+Lasso & Б & $\alpha$=3,162, $C$=250 & 6 & 101,6 \\
+Elastic Net & Б & $\alpha$=0,562, $C$=250, $l_1$=0.9 & 9 & 103,2 \\
+\bottomrule
+\end{tabular}
+\end{table}

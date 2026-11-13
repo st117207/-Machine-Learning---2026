@@ -1,0 +1,87 @@
+# ==========================================================================
+# Общий .gitignore для учебных проектов по машинному обучению
+# ==========================================================================
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+wheels/
+pip-wheel-metadata/
+
+# Виртуальные окружения
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# Jupyter / IPython
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Тесты и кэш инструментов
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.hypothesis/
+
+# ---------- Большие исходные данные (не хранить в git) ----------
+data/raw/
+*.7z
+*.rar
+*.tar
+*.tar.gz
+*.tgz
+# Модельные артефакты и большие бинарники
+*.pkl
+*.joblib
+*.h5
+*.hdf5
+*.parquet
+
+# ---------- LaTeX (производные файлы компиляции) ----------
+*.aux
+*.log
+*.toc
+*.out
+*.fls
+*.fdb_latexmk
+*.blg
+*.bbl
+*.synctex.gz
+*.nav
+*.snm
+*.vrb
+*.bcf
+*.run.xml
+
+# ---------- Служебные папки/файлы проектов ----------
+_preview/
+build_*.log
+data/*.log
+
+# ---------- IDE ----------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.spyproject/
+
+# ---------- ОС ----------
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# ---------- Архивы сдачи (собираются отдельно) ----------
+*.zip
