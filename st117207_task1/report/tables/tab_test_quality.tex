@@ -1,23 +1,26 @@
 \begin{table}[H]
 \centering
-\caption{Качество прогнозов на отложенном испытании}\label{tab:test}
-\begin{tabular}{p{3.4cm}c ccc}
+\caption{Качество прогнозов на отложенных испытаниях}\label{tab:test}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{p{3.0cm}c rrrr rrrr}
 \toprule
-Модель & Призн. & $R^2$ (тест) & MAE (тест), ч & $\rho$ Спирмена \\
+ & & \multicolumn{4}{c}{Испытание 2} & \multicolumn{4}{c}{Испытание 3} \\
+\cmidrule(lr){3-6}\cmidrule(lr){7-10}
+Модель & Призн. & MAE, ч & MAPE, \% & $R^2$ & $\rho$ & MAE, ч & MAPE, \% & $R^2$ & $\rho$ \\
 \midrule
-Базовая (медиана) & А & \textminus{}11,93 & 163,5 & --- \\
-МНК (наивная) & А & \textminus{}14122,62 & 3648,1 & \textminus{}0,41 \\
-МНК + цель min(RUL, C) & А & \textminus{}1441,21 & 1724,2 & \textminus{}0,31 \\
-Полином + гребень & А & \textminus{}7,14 & 80,8 & \textminus{}0,57 \\
-Ridge & А & \textminus{}7,14 & 80,8 & \textminus{}0,57 \\
-Lasso & А & \textminus{}18,01 & 164,0 & \textminus{}0,48 \\
-Elastic Net & А & \textminus{}7,09 & 81,2 & \textminus{}0,58 \\
-МНК (наивная) & Б & \textminus{}464,75 & 996,4 & 0,57 \\
-МНК + цель min(RUL, C) & Б & \textminus{}1,48 & 65,0 & 0,69 \\
-Полином + гребень & Б & \textminus{}98,51 & 448,4 & \textminus{}0,79 \\
-Ridge & Б & \textminus{}0,17 & 40,9 & 0,79 \\
-Lasso & Б & 0,47 & 25,9 & 0,78 \\
-Elastic Net & Б & 0,15 & 32,7 & 0,79 \\
+Базовая (медиана) & А & 163,5 & 237 & \textminus{}11,93 & --- & 211,7 & 80 & \textminus{}0,36 & --- \\
+МНК (наивная) & А & 3648,1 & 3480 & \textminus{}14122,62 & \textminus{}0,41 & 9645,0 & 4954 & \textminus{}2188,40 & \textminus{}0,26 \\
+МНК + цель min(RUL, C) & А & 1724,2 & 2393 & \textminus{}1441,21 & \textminus{}0,31 & 3087,5 & 1796 & \textminus{}229,20 & \textminus{}0,81 \\
+Полином + гребень & А & 80,8 & 74 & \textminus{}7,14 & \textminus{}0,57 & 220,5 & 66 & \textminus{}0,58 & 0,48 \\
+Ridge & А & 80,8 & 74 & \textminus{}7,14 & \textminus{}0,57 & 220,5 & 66 & \textminus{}0,58 & 0,48 \\
+Lasso & А & 164,0 & 203 & \textminus{}18,01 & \textminus{}0,48 & 170,2 & 87 & 0,15 & 0,52 \\
+Elastic Net & А & 81,2 & 77 & \textminus{}7,09 & \textminus{}0,58 & 219,9 & 66 & \textminus{}0,57 & 0,48 \\
+МНК (наивная) & Б & 996,4 & 1276 & \textminus{}464,75 & 0,57 & 1397,4 & 748 & \textminus{}40,97 & \textminus{}0,04 \\
+МНК + цель min(RUL, C) & Б & 65,0 & 93 & \textminus{}1,48 & 0,69 & 225,7 & 79 & \textminus{}0,57 & \textminus{}0,52 \\
+Полином + гребень & Б & 448,4 & 593 & \textminus{}98,51 & \textminus{}0,79 & 914,9 & 361 & \textminus{}17,40 & 0,29 \\
+Ridge & Б & 40,9 & 44 & \textminus{}0,17 & 0,79 & 309,3 & 75 & \textminus{}1,87 & 0,65 \\
+Lasso & Б & 25,9 & 30 & 0,47 & 0,78 & 292,4 & 71 & \textminus{}1,62 & 0,63 \\
+Elastic Net & Б & 32,7 & 34 & 0,15 & 0,79 & 300,3 & 73 & \textminus{}1,75 & 0,49 \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \end{table}

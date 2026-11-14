@@ -4,10 +4,11 @@
 Методика
 --------
 * Обучающее испытание — набор 1 IMS (2156 записей, полный жизненный цикл).
-  Отложенное испытание — набор 2 (984 записей), хронологически более поздний:
-  разбиение только временное, одно испытание отложено полностью.
+  Отложенные испытания — наборы 2 (984 записи) и 3 (4448 записи),
+  хронологически более поздние: разбиение только временное, оба отложены
+  полностью и используются по одному разу в самом конце.
 * Подбор гиперпараметров — GridSearchCV с TimeSeriesSplit(5) только по
-  обучающему испытанию; тест (набор 2) используется один раз.
+  обучающему испытанию.
 * Признаки по записи (по каждому подшипнику): RMS, дисперсия, эксцесс,
   пик-фактор и доли энергии в пяти широких полосах. Амплитудные признаки
   нормируются на здоровый базовый уровень начала испытания (медиана первых
@@ -38,13 +39,14 @@ from sklearn.base import BaseEstimator, TransformerMixin, clone
 from sklearn.compose import TransformedTargetRegressor
 from sklearn.dummy import DummyRegressor
 from sklearn.linear_model import ElasticNet, Lasso, LinearRegression, Ridge
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import mean_absolute_error, mean_squared_error, make_scorer, r2_score
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit, cross_validate
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 
 from config import (FIG_DIR, FEATURES_CSV, N_BOOTSTRAP, RANDOM_STATE,
-                    RESULTS_JSON, TAB_DIR, TRAIN_TEST_NAME, HOLDOUT_TEST_NAME)
+                    RESULTS_JSON, TAB_DIR, THIRD_TEST_NAME, TRAIN_TEST_NAME,
+                    HOLDOUT_TEST_NAME)
 
 CV_FOLDS = TimeSeriesSplit(n_splits=5)
 ALPHAS = list(np.logspace(-3, 4, 29))
@@ -215,10 +217,30 @@ def build_models(feats_a: list[str], feats_b: list[str]) -> dict[str, dict]:
 # Метрики и форматирование
 # ---------------------------------------------------------------------------
 
+# MAPE считаем только по записям с фактическим ресурсом не меньше этого
+# порога: при малых значениях (близко к концу испытания) процент теряет
+# смысл — ошибка 10 ч при фактических 1 ч даёт 1000 %.
+MAPE_MIN_Y = 24.0  # ч
+
+
 def metrics(y_true, y_pred) -> dict[str, float]:
-    return {"MAE": float(mean_absolute_error(y_true, y_pred)),
-            "RMSE": float(mean_squared_error(y_true, y_pred) ** 0.5),
-            "R2": float(r2_score(y_true, y_pred))}
+    """MAE, RMSE, R2, MAPE (по записям с y >= MAPE_MIN_Y) и nMAE (% от среднего)."""
+    yt = np.asarray(y_true, dtype=float)
+    yp = np.asarray(y_pred, dtype=float)
+    mae = float(mean_absolute_error(yt, yp))
+    mask = yt >= MAPE_MIN_Y
+    mape = (float(np.mean(np.abs(yt[mask] - yp[mask]) / yt[mask]) * 100)
+            if mask.any() else float("nan"))
+    return {"MAE": mae,
+            "RMSE": float(mean_squared_error(yt, yp) ** 0.5),
+            "R2": float(r2_score(yt, yp)),
+            "MAPE": mape,
+            "nMAE": mae / yt.mean() * 100}
+
+
+def _mape_score(y_true, y_pred) -> float:
+    """Скорер для кросс-валидации: MAPE по записям с y >= MAPE_MIN_Y."""
+    return metrics(y_true, y_pred)["MAPE"]
 
 
 def _spearman_safe(y_pred, y_true) -> float:
@@ -290,6 +312,7 @@ def main(only_tables: bool = False) -> None:
     df, feats_a, feats_b = prepare_features(df_raw)
     tr = df[df["test"] == TRAIN_TEST_NAME].reset_index(drop=True)
     ho = df[df["test"] == HOLDOUT_TEST_NAME].reset_index(drop=True)
+    ho3 = df[df["test"] == THIRD_TEST_NAME].reset_index(drop=True)
 
     models = build_models(feats_a, feats_b)
     results: dict[str, dict] = {}
@@ -325,24 +348,34 @@ def main(only_tables: bool = False) -> None:
         cvr = cross_validate(best, Xtr, ytr, cv=CV_FOLDS,
                              scoring={"MAE": "neg_mean_absolute_error",
                                       "RMSE": "neg_root_mean_squared_error",
-                                      "R2": "r2"})
+                                      "R2": "r2",
+                                      "MAPE": make_scorer(_mape_score,
+                                                          greater_is_better=False)})
         if cv_mae is None:
             cv_mae = float(-cvr["test_MAE"].mean())
             cv_std = float(cvr["test_MAE"].std())
+        y3 = ho3["rul_h"].to_numpy()
+        X3 = ho3[spec["feats"]].to_numpy()
+        pred3 = best.predict(X3)
         results[key] = dict(
             name=spec["name"], cfg=spec["cfg"], feats=len(spec["feats"]), params=params,
             train=metrics(ytr, best.predict(Xtr)),
             cv={"MAE": cv_mae, "MAE_std": cv_std,
                 "RMSE": float(-cvr["test_RMSE"].mean()),
-                "R2": float(cvr["test_R2"].mean())},
+                "R2": float(cvr["test_R2"].mean()),
+                "MAPE": float(-cvr["test_MAPE"].mean()),
+                "nMAE": cv_mae / ytr.mean() * 100},
             test=metrics(yho, best.predict(Xho)),
             test_spearman=_spearman_safe(best.predict(Xho), yho),
+            test3=metrics(y3, pred3),
+            test3_spearman=_spearman_safe(pred3, y3),
             dof=_dof(best),
         )
         fitted[key] = (best, Xtr, ytr, Xho, yho)
         r_ = results[key]
         print(f"   CV MAE={cv_mae:.1f} ± {cv_std:.1f}  test MAE={r_['test']['MAE']:.1f} "
-              f"R2={r_['test']['R2']:.2f} rho={r_['test_spearman']:.2f}")
+              f"(MAPE {r_['test']['MAPE']:.0f}%)  R2={r_['test']['R2']:.2f} "
+              f"rho={r_['test_spearman']:.2f}  test3 MAE={r_['test3']['MAE']:.1f}")
 
     # ------------------------------------------------------------------
     # Окончательная модель: правило одного стандартного отклонения.
@@ -413,16 +446,24 @@ def main(only_tables: bool = False) -> None:
     # Сводка по данным
     t1 = tr["t_start"]
     t2 = ho["t_start"]
+    t3 = ho3["t_start"]
     data_summary = {
         "n_train": int(len(tr)), "n_holdout": int(len(ho)),
+        "n_holdout2": int(len(ho3)),
         "t_start_train": t1.iloc[0].strftime("%d.%m.%Y"),
         "t_end_train": t1.iloc[-1].strftime("%d.%m.%Y"),
         "t_start_holdout": t2.iloc[0].strftime("%d.%m.%Y"),
         "t_end_holdout": t2.iloc[-1].strftime("%d.%m.%Y"),
+        "t_start_holdout2": t3.iloc[0].strftime("%d.%m.%Y"),
+        "t_end_holdout2": t3.iloc[-1].strftime("%d.%m.%Y"),
         "rul_max_train": float(tr["rul_h"].max()),
         "rul_max_holdout": float(ho["rul_h"].max()),
+        "rul_max_holdout2": float(ho3["rul_h"].max()),
         "dur_train_h": float((t1.iloc[-1] - t1.iloc[0]).total_seconds() / 3600),
         "dur_holdout_h": float((t2.iloc[-1] - t2.iloc[0]).total_seconds() / 3600),
+        "dur_holdout2_h": float((t3.iloc[-1] - t3.iloc[0]).total_seconds() / 3600),
+        "rul_mean_holdout": float(ho["rul_h"].mean()),
+        "rul_mean_holdout2": float(ho3["rul_h"].mean()),
     }
 
     out = dict(results=results, best_key=best_key, boot_summary=boot_summary,
@@ -431,8 +472,9 @@ def main(only_tables: bool = False) -> None:
     RESULTS_JSON.parent.mkdir(parents=True, exist_ok=True)
     RESULTS_JSON.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    make_figures(df, tr, ho, results, curves, best_key, models, fitted,
-                 boot_summary, feat_names_final, coefs, pred_ho, res_ho, Xw)
+    pred3 = best_model.predict(ho3[spec_b["feats"]].to_numpy())
+    make_figures(df, tr, ho, ho3, results, curves, best_key, models, fitted,
+                 boot_summary, feat_names_final, coefs, pred_ho, res_ho, Xw, pred3)
     make_tables(results, best_key, boot_summary, resid_corr, data_summary)
     make_macros(results, best_key, resid_corr, data_summary, ols_min_pred)
     print("Готово: таблицы, рисунки и макросы записаны.")
@@ -446,20 +488,22 @@ def _t_hours(t: pd.Series) -> np.ndarray:
     return (t - t.iloc[0]).dt.total_seconds().to_numpy() / 3600.0
 
 
-def make_figures(df, tr, ho, results, curves, best_key, models, fitted,
-                 boot_summary, feat_names_final, coefs, pred_ho, res_ho, Xho_raw) -> None:
+def make_figures(df, tr, ho, ho3, results, curves, best_key, models, fitted,
+                 boot_summary, feat_names_final, coefs, pred_ho, res_ho, Xho_raw,
+                 pred3) -> None:
     t1 = _t_hours(tr["t_start"])
     t2 = _t_hours(ho["t_start"])
+    t3 = _t_hours(ho3["t_start"])
 
-    # 1. Деградация: RMS по подшипникам в обоих испытаниях
-    fig, axes = plt.subplots(1, 2, figsize=(6.7, 2.8), sharey=False)
+    # 1. Деградация: RMS по подшипникам во всех трёх испытаниях
+    fig, axes = plt.subplots(1, 3, figsize=(6.7, 2.6), sharey=False)
     colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728"]
-    for b in range(1, 5):
-        axes[0].plot(t1, tr[f"b{b}_rms"], color=colors[b - 1], lw=0.9,
-                     label=f"подшипник {b}")
-        axes[1].plot(t2, ho[f"b{b}_rms"], color=colors[b - 1], lw=0.9,
-                     label=f"подшипник {b}")
-    for ax, ttl in zip(axes, ["Испытание 1", "Испытание 2"]):
+    for ax, data, t_, ttl in [(axes[0], tr, t1, "Испытание 1"),
+                              (axes[1], ho, t2, "Испытание 2"),
+                              (axes[2], ho3, t3, "Испытание 3")]:
+        for b in range(1, 5):
+            ax.plot(t_, data[f"b{b}_rms"], color=colors[b - 1], lw=0.9,
+                    label=f"подшипник {b}")
         ax.set_xlabel("Время испытания, ч")
         ax.set_title(ttl, fontsize=10)
     axes[0].set_ylabel("RMS, В")
@@ -471,17 +515,17 @@ def make_figures(df, tr, ho, results, curves, best_key, models, fitted,
     # 2. Перераспределение энергии по полосам (отказавший подшипник)
     bands = ["e0_1khz", "e1_2khz", "e2_3khz", "e3_5khz", "e5_10khz"]
     labels = ["0–1 кГц", "1–2 кГц", "2–3 кГц", "3–5 кГц", "5–10 кГц"]
-    fig, axes = plt.subplots(1, 2, figsize=(6.7, 3.0), sharey=True)
-    axes[0].stackplot(t1, *[tr[f"b3_{bd}"].to_numpy() for bd in bands],
-                      labels=labels, alpha=0.85, linewidth=0.2)
-    axes[1].stackplot(t2, *[ho[f"b1_{bd}"].to_numpy() for bd in bands],
-                      alpha=0.85, linewidth=0.2)
-    axes[0].set_title("Испытание 1, подшипник 3", fontsize=10)
-    axes[1].set_title("Испытание 2, подшипник 1", fontsize=10)
+    fig, axes = plt.subplots(1, 3, figsize=(6.7, 2.9), sharey=True)
+    for ax, data, t_, ttl, b in [
+            (axes[0], tr, t1, "Испытание 1, подшипник 3", 3),
+            (axes[1], ho, t2, "Испытание 2, подшипник 1", 1),
+            (axes[2], ho3, t3, "Испытание 3, подшипник 3", 3)]:
+        ax.stackplot(t_, *[data[f"b{b}_{bd}"].to_numpy() for bd in bands],
+                     labels=labels, alpha=0.85, linewidth=0.2)
+        ax.set_title(ttl, fontsize=10)
+        ax.set_xlabel("Время испытания, ч")
+        ax.set_ylim(0, 1)
     axes[0].set_ylabel("Доля энергии полосы")
-    axes[0].set_xlabel("Время испытания, ч")
-    axes[1].set_xlabel("Время испытания, ч")
-    axes[0].set_ylim(0, 1)
     axes[0].legend(fontsize=7.5, ncol=2, loc="upper left")
     fig.tight_layout()
     fig.savefig(FIG_DIR / "fig2_bands.pdf")
@@ -520,12 +564,16 @@ def make_figures(df, tr, ho, results, curves, best_key, models, fitted,
     # 4. Измеренное — предсказанное
     best_model, Xtr_b, ytr_b, Xho_b, yho_b = fitted[best_key]
     pred_tr = best_model.predict(Xtr_b)
+    y3 = ho3["rul_h"].to_numpy()
     fig, ax = plt.subplots(figsize=(4.7, 4.4))
-    lim = max(ytr_b.max(), pred_tr.max(), yho_b.max(), pred_ho.max()) * 1.05
+    lim = max(ytr_b.max(), pred_tr.max(), yho_b.max(), pred_ho.max(),
+              y3.max(), pred3.max()) * 1.05
     ax.plot([0, lim], [0, lim], "k--", lw=1, label="идеальный прогноз")
     ax.scatter(pred_tr, ytr_b, s=5, alpha=0.25, c="#9ecae1", label="обучение (испытание 1)")
     ax.scatter(pred_ho, yho_b, s=9, alpha=0.75, c="#d62728", marker="^",
                label="тест (испытание 2)")
+    ax.scatter(pred3, y3, s=9, alpha=0.6, c="#2ca02c", marker="s",
+               label="тест (испытание 3)")
     ax.set_xlabel("Прогноз времени до конца испытания, ч")
     ax.set_ylabel("Измеренное время до конца испытания, ч")
     ax.set_xlim(0, lim)
@@ -570,16 +618,18 @@ def make_figures(df, tr, ho, results, curves, best_key, models, fitted,
         fig.savefig(FIG_DIR / "fig6_bootstrap.pdf")
         plt.close(fig)
 
-    # 7. Интерполяционная оценка и перенос
+    # 7. Интерполяционная оценка и перенос (испытания 2 и 3)
     fig, ax = plt.subplots(figsize=(5.6, 3.0))
     keys = ["base", best_key]
     labels = ["Базовая модель", "Окончательная модель"]
     cv_mae = [results[k]["cv"]["MAE"] for k in keys]
-    te_mae = [results[k]["test"]["MAE"] for k in keys]
+    te2_mae = [results[k]["test"]["MAE"] for k in keys]
+    te3_mae = [results[k]["test3"]["MAE"] for k in keys]
     x = np.arange(len(keys))
-    w = 0.36
-    ax.bar(x - w / 2, cv_mae, w, label="Кросс-валидация (интерполяция)", color="#08519c")
-    ax.bar(x + w / 2, te_mae, w, label="Перенос (испытание 2)", color="#d62728")
+    w = 0.26
+    ax.bar(x - w, cv_mae, w, label="Кросс-валидация (интерполяция)", color="#08519c")
+    ax.bar(x, te2_mae, w, label="Перенос (испытание 2)", color="#d62728")
+    ax.bar(x + w, te3_mae, w, label="Перенос (испытание 3)", color="#2ca02c")
     ax.set_xticks(x)
     ax.set_xticklabels(labels, fontsize=9)
     ax.set_ylabel("MAE, ч")
@@ -589,13 +639,15 @@ def make_figures(df, tr, ho, results, curves, best_key, models, fitted,
     plt.close(fig)
 
     # Д1. Эксцесс по подшипникам (приложение)
-    fig, axes = plt.subplots(1, 2, figsize=(6.7, 2.8), sharey=False)
+    fig, axes = plt.subplots(1, 3, figsize=(6.7, 2.7), sharey=False)
     for b in range(1, 5):
         axes[0].plot(t1, tr[f"b{b}_kurt"], color=colors[b - 1], lw=0.9, label=f"подшипник {b}")
         axes[1].plot(t2, ho[f"b{b}_kurt"], color=colors[b - 1], lw=0.9)
+        axes[2].plot(t3, ho3[f"b{b}_kurt"], color=colors[b - 1], lw=0.9)
     axes[0].set_ylabel("Эксцесс")
     axes[0].set_xlabel("Время испытания 1, ч")
     axes[1].set_xlabel("Время испытания 2, ч")
+    axes[2].set_xlabel("Время испытания 3, ч")
     axes[0].legend(fontsize=8)
     fig.tight_layout()
     fig.savefig(FIG_DIR / "figD1_kurtosis.pdf")
@@ -621,18 +673,24 @@ def _short(key: str) -> str:
 def make_tables(results, best_key, boot_summary, resid_corr, data_summary) -> None:
     # Таблица 1 — сводка по испытаниям
     lines = [
-        r"\begin{table}[H]", r"\centering", r"\small", r"\setlength{\tabcolsep}{5pt}",
+        r"\begin{table}[H]", r"\centering", r"\small", r"\setlength{\tabcolsep}{4pt}",
         r"\caption{Характеристика исходных испытаний}\label{tab:data}",
-        r"\begin{tabular}{p{3.9cm}p{4.3cm}p{4.3cm}}", r"\toprule",
-        r"Параметр & Испытание 1 (обучение) & Испытание 2 (тест) \\", r"\midrule",
-        f"Число записей & {data_summary['n_train']} & {data_summary['n_holdout']} \\\\",
+        r"\begin{tabular}{p{2.6cm}p{3.1cm}p{3.1cm}p{3.1cm}}", r"\toprule",
+        r"Параметр & Исп. 1 (обучение) & Исп. 2 (тест) & Исп. 3 (тест) \\",
+        r"\midrule",
+        f"Число записей & {data_summary['n_train']} & {data_summary['n_holdout']} & "
+        f"{data_summary['n_holdout2']} \\\\",
         f"Период & {data_summary['t_start_train']} --- {data_summary['t_end_train']} & "
-        f"{data_summary['t_start_holdout']} --- {data_summary['t_end_holdout']} \\\\",
+        f"{data_summary['t_start_holdout']} --- {data_summary['t_end_holdout']} & "
+        f"{data_summary['t_start_holdout2']} --- {data_summary['t_end_holdout2']} \\\\",
         f"Длительность, ч & {fmt(data_summary['dur_train_h'], 1)} & "
-        f"{fmt(data_summary['dur_holdout_h'], 1)} \\\\",
+        f"{fmt(data_summary['dur_holdout_h'], 1)} & "
+        f"{fmt(data_summary['dur_holdout2_h'], 1)} \\\\",
         f"Максимум прокси-ресурса, ч & {fmt(data_summary['rul_max_train'], 1)} & "
-        f"{fmt(data_summary['rul_max_holdout'], 1)} \\\\",
-        f"Отказавший подшипник & №3 (внутр. кольцо), №4 (ролики) & №1 (наружн. кольцо) \\\\",
+        f"{fmt(data_summary['rul_max_holdout'], 1)} & "
+        f"{fmt(data_summary['rul_max_holdout2'], 1)} \\\\",
+        f"Отказавший подшипник & №3 (внутр. кольцо), №4 (ролики) & №1 (наружн. кольцо) & "
+        f"№3 (наружн. кольцо) \\\\",
         r"\bottomrule", r"\end{tabular}", r"\end{table}",
     ]
     (TAB_DIR / "tab_data.tex").write_text("\n".join(lines), encoding="utf-8")
@@ -681,19 +739,25 @@ def make_tables(results, best_key, boot_summary, resid_corr, data_summary) -> No
             + [r"\bottomrule", r"\end{tabular}}", r"\end{table}"]
     (TAB_DIR / "tab_metrics.tex").write_text("\n".join(lines), encoding="utf-8")
 
-    # Таблица 4 — R2 и ранговая корреляция на тесте
+    # Таблица 4 — качество на отложенных испытаниях 2 и 3
     lines = [r"\begin{table}[H]", r"\centering",
-             r"\caption{Качество прогнозов на отложенном испытании}\label{tab:test}",
-             r"\begin{tabular}{p{3.4cm}c ccc}", r"\toprule",
-             r"Модель & Призн. & $R^2$ (тест) & MAE (тест), ч & $\rho$ Спирмена \\", r"\midrule"]
+             r"\caption{Качество прогнозов на отложенных испытаниях}\label{tab:test}",
+             r"\resizebox{\textwidth}{!}{%",
+             r"\begin{tabular}{p{3.0cm}c rrrr rrrr}", r"\toprule",
+             r" & & \multicolumn{4}{c}{Испытание 2} & \multicolumn{4}{c}{Испытание 3} \\",
+             r"\cmidrule(lr){3-6}\cmidrule(lr){7-10}",
+             r"Модель & Призн. & MAE, ч & MAPE, \% & $R^2$ & $\rho$ & MAE, ч & MAPE, \% & $R^2$ & $\rho$ \\",
+             r"\midrule"]
     for k in ORDER:
         if k not in results:
             continue
         r_ = results[k]
         lines.append(f"{_short(k)} & {('Б' if r_['cfg'] == 'B' else 'А')} & "
-                     f"{fmt(r_['test']['R2'], 2)} & {fmt(r_['test']['MAE'], 1)} & "
-                     f"{fmt(r_['test_spearman'], 2)} \\\\")
-    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
+                     f"{fmt(r_['test']['MAE'], 1)} & {fmt(r_['test']['MAPE'], 0)} & "
+                     f"{fmt(r_['test']['R2'], 2)} & {fmt(r_['test_spearman'], 2)} & "
+                     f"{fmt(r_['test3']['MAE'], 1)} & {fmt(r_['test3']['MAPE'], 0)} & "
+                     f"{fmt(r_['test3']['R2'], 2)} & {fmt(r_['test3_spearman'], 2)} \\\\")
+    lines += [r"\bottomrule", r"\end{tabular}}", r"\end{table}"]
     (TAB_DIR / "tab_test_quality.tex").write_text("\n".join(lines), encoding="utf-8")
 
     # Таблица 5 — коэффициенты и бутстрэп: только ненулевые коэффициенты
@@ -757,6 +821,33 @@ def make_macros(results, best_key, resid_corr, data_summary, ols_min_pred: float
         ("BestRMSETrain", fmt(r["train"]["RMSE"], 1)),
         ("BestRtwoTrain", fmt(r["train"]["R2"], 2)),
         ("BestRhoTest", fmt(r["test_spearman"], 2)),
+        ("BestCapHours", f"{r['params']['cap_hours']:g}"),
+        ("BaseMAPETestThree", fmt(results["base"]["test3"]["MAPE"], 0)),
+        ("MeanRulTest", fmt(data_summary["rul_mean_holdout"], 0)),
+        ("MeanRulTestThree", fmt(data_summary["rul_mean_holdout2"], 0)),
+        ("BestMAPETest", fmt(r["test"]["MAPE"], 0)),
+        ("BestMAPETestCV", fmt(r["cv"]["MAPE"], 0)),
+        ("BestNMAETest", fmt(r["test"]["nMAE"], 0)),
+        ("BestNMAETestBase", fmt(results["base"]["test"]["nMAE"], 0)),
+        ("BaseNMAETestThree", fmt(results["base"]["test3"]["nMAE"], 0)),
+        ("LassoAMAETestThree", fmt(results["lasso"]["test3"]["MAE"], 1)),
+        ("LassoANMAETestThree", fmt(results["lasso"]["test3"]["nMAE"], 0)),
+        ("LassoANMAETest", fmt(results["lasso"]["test"]["nMAE"], 0)),
+        ("ENetAMAETestThree", fmt(results["enet"]["test3"]["MAE"], 1)),
+        ("BestMAETestThree", fmt(r["test3"]["MAE"], 1)),
+        ("BestMAPETestThree", fmt(r["test3"]["MAPE"], 0)),
+        ("BestNMAETestThree", fmt(r["test3"]["nMAE"], 0)),
+        ("BestRMSETestThree", fmt(r["test3"]["RMSE"], 1)),
+        ("BestRtwoTestThree", fmt(r["test3"]["R2"], 2)),
+        ("BestRhoTestThree", fmt(r["test3_spearman"], 2)),
+        ("OlsMAETestThree", fmt(results["ols"]["test3"]["MAE"], 1)),
+        ("PhysAMAETestThree", fmt(results["phys"]["test3"]["MAE"], 1)),
+        ("RidgeAMAETestThree", fmt(results["ridge"]["test3"]["MAE"], 1)),
+        ("PhysBMAETestThree", fmt(results["phys_b"]["test3"]["MAE"], 1)),
+        ("RidgeBMAETestThree", fmt(results["ridge_b"]["test3"]["MAE"], 1)),
+        ("ENetBMAETestThree", fmt(results["enet_b"]["test3"]["MAE"], 1)),
+        ("RidgePolyBMAETestThree", fmt(results["ridge_poly_b"]["test3"]["MAE"], 1)),
+        ("BaseMAETestThree", fmt(results["base"]["test3"]["MAE"], 1)),
         ("BaseMAETest", fmt(results["base"]["test"]["MAE"], 1)),
         ("BaseRMSETest", fmt(results["base"]["test"]["RMSE"], 1)),
         ("OlsMAETest", fmt(results["ols"]["test"]["MAE"], 1)),
@@ -778,10 +869,13 @@ def make_macros(results, best_key, resid_corr, data_summary, ols_min_pred: float
         ("RhoResidKurt", fmt(resid_corr["rho_max_kurt"], 2)),
         ("NTrain", str(data_summary["n_train"])),
         ("NHoldout", str(data_summary["n_holdout"])),
+        ("NHoldoutThree", str(data_summary["n_holdout2"])),
         ("DurTrain", fmt(data_summary["dur_train_h"], 0)),
         ("DurHoldout", fmt(data_summary["dur_holdout_h"], 0)),
+        ("DurHoldoutThree", fmt(data_summary["dur_holdout2_h"], 0)),
         ("RulMaxTrain", fmt(data_summary["rul_max_train"], 0)),
         ("RulMaxHoldout", fmt(data_summary["rul_max_holdout"], 0)),
+        ("RulMaxHoldoutThree", fmt(data_summary["rul_max_holdout2"], 0)),
     ]
     lines = [f"\\newcommand{{\\{k}}}{{{v}}}" for k, v in macros]
     (TAB_DIR / "macros.tex").write_text("\n".join(lines), encoding="utf-8")

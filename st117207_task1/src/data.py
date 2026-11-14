@@ -2,7 +2,8 @@
 """Получение исходных данных IMS и извлечение признаков по записям.
 
 Схема работы:
-1) если каталоги data/raw/1st_test и data/raw/2nd_test уже распакованы — пропустить;
+1) если каталоги data/raw/1st_test, 2nd_test и 4th_test (так назван каталог
+   испытания 3) уже распакованы — пропустить;
 2) иначе скачать архив NASA PCoE «4. Bearings» (URL фиксирован) и распаковать
    цепочку zip -> 7z -> rar;
 3) для каждой записи (файла) вычислить по каждому из 4 виброканалов RMS,
@@ -24,7 +25,8 @@ import pandas as pd
 from scipy.stats import kurtosis
 
 from config import (BANDS_HZ, FEATURES_CSV, FS_HZ, N_SAMPLES, PROC_DIR, RAW_DIR,
-                    ROOT, TRAIN_TEST_NAME, HOLDOUT_TEST_NAME)
+                    ROOT, THIRD_TEST_END, THIRD_TEST_NAME, TRAIN_TEST_NAME,
+                    HOLDOUT_TEST_NAME)
 
 ZIP_URL = "https://phm-datasets.s3.amazonaws.com/NASA/4.+Bearings.zip"
 ZIP_PATH = RAW_DIR / "IMS_Bearings.zip"
@@ -75,14 +77,22 @@ def _unpack_7z() -> None:
             z.extract(targets=["1st_test.rar", "2nd_test.rar", "3rd_test.rar"], path=RAW_DIR)
     except ImportError:
         exe = _find_7z()
-        _run_tool([str(exe), "e", str(src), "1st_test.rar", "2nd_test.rar", "-y", f"-o{RAW_DIR}"])
+        _run_tool([str(exe), "e", str(src), "1st_test.rar", "2nd_test.rar",
+                   "3rd_test.rar", "-y", f"-o{RAW_DIR}"])
 
 
 def _unpack_rar(name: str) -> None:
-    """Распаковывает один RAR в одноимённый каталог (rarfile/unrar -> 7-Zip)."""
+    """Распаковывает один RAR в одноимённый каталог (rarfile/unrar -> 7-Zip).
+
+    Особенность архива 3rd_test.rar: внутри каталог назван «4th_test»,
+    поэтому для проверки завершённости используются ожидаемые каталоги.
+    """
     rar = RAW_DIR / name
     out = RAW_DIR / name.replace(".rar", "")
-    if out.exists() and any(out.rglob("*")):
+    # Каталоги, по которым проверяем, что распаковка уже выполнена
+    done_dirs = {"3rd_test.rar": RAW_DIR / "4th_test"}
+    check = done_dirs.get(name, out)
+    if check.exists() and any(check.rglob("*")):
         return
     print(f"Распаковка {name} ...")
     try:
@@ -120,12 +130,15 @@ def ensure_raw_data() -> None:
     _unpack_7z()
     _unpack_rar("1st_test.rar")
     _unpack_rar("2nd_test.rar")
+    _unpack_rar("3rd_test.rar")
 
 
 def raw_test_dirs() -> dict[str, Path]:
     return {
         TRAIN_TEST_NAME: RAW_DIR / TRAIN_TEST_NAME / TRAIN_TEST_NAME,
         HOLDOUT_TEST_NAME: RAW_DIR / HOLDOUT_TEST_NAME / HOLDOUT_TEST_NAME,
+        # В архиве 3rd_test.rar каталог с записями по ошибке назван «4th_test»
+        THIRD_TEST_NAME: RAW_DIR / "4th_test" / "txt",
     }
 
 
@@ -210,7 +223,7 @@ def build_features() -> pd.DataFrame:
         return pd.read_csv(FEATURES_CSV, parse_dates=["t_start"])
 
     rows = []
-    n_channels = {"1st_test": 8, "2nd_test": 4}
+    n_channels = {"1st_test": 8, "2nd_test": 4, "3rd_test": 4}
     for name, d in raw_test_dirs().items():
         files = sorted(f for f in d.iterdir() if f.is_file())
         print(f"{name}: {len(files)} записей")
@@ -224,6 +237,17 @@ def build_features() -> pd.DataFrame:
                 print(f"  {name}: обработано {i+1}/{len(files)}")
 
     df = pd.DataFrame(rows).sort_values(["test", "t_start"]).reset_index(drop=True)
+
+    # Испытание 3: ограничиваем документированным периодом — в архиве
+    # 3rd_test.rar есть записи после остановки стенда 04.04.2004 19:01:57
+    # (по Readme NASA), их отбрасываем, чтобы прокси-ресурс совпадал
+    # с документированным испытанием.
+    cut = pd.Timestamp(THIRD_TEST_END)
+    n_before = len(df)
+    df = df[~((df["test"] == THIRD_TEST_NAME) & (df["t_start"] > cut))]
+    if len(df) != n_before:
+        print(f"Испытание 3: отброшено {n_before - len(df)} записей "
+              f"после документированной остановки")
 
     # Целевая величина — прокси-ресурс: время от текущей записи до конца
     # данного испытания (по отметкам времени имён файлов), ч.
