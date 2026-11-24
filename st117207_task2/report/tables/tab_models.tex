@@ -1,0 +1,19 @@
+\begin{table}[H]
+\centering
+\footnotesize
+\caption{Качество моделей: кросс-валидация на обучении и однократная проверка на тесте}\label{tab:models}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccccc}
+\toprule
+Модель & CV macro-F1 & Тест, accuracy & Bal. accuracy & Macro-F1 & Weighted-F1 & ROC-AUC \\
+\midrule
+Dummy (most frequent) & 0,13 $\pm$ 0,00 & 0,7916 & 0,14 & 0,13 & 0,70 & 0,50 \\
+Логистическая регрессия & 0,86 $\pm$ 0,05 & 0,9539 & 0,99 & 0,82 & 0,96 & 1,00 \\
+kNN & 0,93 $\pm$ 0,02 & 0,9991 & 0,87 & 0,88 & 1,00 & 0,93 \\
+SVM (RBF) & 0,91 $\pm$ 0,02 & 0,9976 & 0,91 & 0,84 & 1,00 & 1,00 \\
+Решающее дерево & 0,95 $\pm$ 0,07 & 0,9999 & 0,99 & 0,99 & 1,00 & 0,99 \\
+Случайный лес & 0,94 $\pm$ 0,08 & 0,9999 & 0,99 & 0,99 & 1,00 & 1,00 \\
+Градиентный бустинг (HistGB) & 0,96 $\pm$ 0,06 & 0,9999 & 0,99 & 0,99 & 1,00 & 1,00 \\
+\bottomrule
+\end{tabular}}
+\end{table}

@@ -1,0 +1,15 @@
+\begin{table}[H]
+\centering
+\footnotesize
+\caption{Сравнение трёх алгоритмов на одной подвыборке 1~200 циклов и четырёх PCA-координатах}\label{tab:clust}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcrrrrrrr}
+\toprule
+Алгоритм & Групп & Размеры групп & Силуэт & Д.--Б. & Шум, \% & ARI охл. & ARI клап. & ARI акк. \\
+\midrule
+KMeans & 3 & 127/675/398 & 0,588 & 0,634 & 0,0 & 0,582 & 0,038 & 0,039 \\
+Ward & 3 & 118/684/398 & 0,578 & 0,604 & 0,0 & 0,577 & 0,035 & 0,035 \\
+DBSCAN & 4 & 224/114/405/397 & 0,635 & 0,618 & 5,0 & 0,906 & 0,013 & 0,096 \\
+\bottomrule
+\end{tabular}}
+\end{table}

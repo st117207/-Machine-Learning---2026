@@ -1,0 +1,19 @@
+\begin{table}[H]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\caption{Подбор гиперпараметров: поиск, выбранные значения и оценка кросс-валидации}\label{tab:search}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{2.4cm}>{\raggedright\arraybackslash}p{1.5cm}>{\raggedright\arraybackslash}p{4.1cm}>{\raggedright\arraybackslash}p{4.2cm}r@{}}
+\toprule
+Модель & Поиск & Пространство & Лучшие параметры & CV macro-F1 \\
+\midrule
+Dummy (most frequent) & --- & --- & --- & 0,13 \\
+Логистическая регрессия & Grid, $5\times2$ & $C\in\{0{,}01;\ldots;100\}$; class\_weight & C=1, class\_weight=balanced & 0,86 \\
+kNN & Grid, $5\times2$ & $k\in\{1;3;5;9;15\}$; weights & n\_neighbors=1, weights=uniform & 0,93 \\
+SVM (RBF) & Grid, $3\times2\times2$ & $C\in\{1;10;100\}$; $\gamma\in\{0{,}01;0{,}1\}$; class\_weight & C=100, class\_weight=balanced, gamma=0,01 & 0,91 \\
+Решающее дерево & Grid, $7\times4$ & max\_depth; min\_samples\_leaf & max\_depth=10, min\_samples\_leaf=1 & 0,95 \\
+Случайный лес & Grid, $1\times3\times2\times2$ & max\_depth; min\_samples\_leaf; max\_features & max\_depth=10, max\_features=0,5, min\_samples\_leaf=1, n\_estimators=200 & 0,94 \\
+Градиентный бустинг (HistGB) & Random, 24 & learning\_rate; max\_iter; max\_leaf\_nodes; min\_samples\_leaf; $l_2$ & class\_weight=balanced, l2\_regularization=0, learning\_rate=0,056, max\_iter=100, max\_leaf\_nodes=31, min\_samples\_leaf=10 & 0,96 \\
+\bottomrule
+\end{tabular}
+\end{table}
